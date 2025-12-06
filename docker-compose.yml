@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: cloud_drive_backend
+    ports:
+      - "8006:8006"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/cloudapp.db:/app/cloudapp.db
+    environment:
+      - SECRET_KEY=change_this_secret_key_in_production
+      - ALGORITHM=HS256
+
+  frontend:
+    build: ./frontend
+    container_name: cloud_drive_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
