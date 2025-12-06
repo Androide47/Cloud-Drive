@@ -1,8 +1,10 @@
 from fastapi import FastAPI, APIRouter
-from routes import files
+from routes import files, share, installer
 from fastapi.middleware.cors import CORSMiddleware
-from models import Base, engine
-from auth import router as auth_router
+from models.user import Base
+from models.shared_link import SharedLink
+from auth.auth import router as auth_router
+from settings.database import engine
 
 app = FastAPI()
 
@@ -18,6 +20,8 @@ Base.metadata.create_all(bind=engine)
 
 app.include_router(files.route)
 app.include_router(auth_router)
+app.include_router(share.router)
+app.include_router(installer.router, prefix="/installer", tags=["Installer"])
 
 @app.get("/")
 def read_root():

@@ -1,0 +1,2 @@
+This is a dummy installer file for the Cloud Drive Client.
+In the future, this will be a real disk image or executable.

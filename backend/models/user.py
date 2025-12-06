@@ -1,3 +1,5 @@
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
 from settings.database import Base
 
 class User(Base):
@@ -6,6 +8,5 @@ class User(Base):
     first_name = Column(String)
     last_name = Column(String)
     email = Column(String)
-    username = Column(String)
     hashed_password = Column(String)
-    files = relationship("File", back_populates="owner")
+    role = Column( String)

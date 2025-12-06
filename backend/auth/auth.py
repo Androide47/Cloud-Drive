@@ -2,7 +2,7 @@ from datetime import timedelta, timezone, datetime
 from typing_extensions import Annotated
 from fastapi import APIRouter, Depends, status, HTTPException
 from pydantic import BaseModel
-from models.users import User
+from models.user import User
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from settings.database import SessionLocal
@@ -15,23 +15,23 @@ router = APIRouter(
     tags=["auth"],
 )
 
-SECRET_KEY = "YourSecretKey"
-ALGORITHM = "YourAlgorithm" #Example HS256
+SECRET_KEY = "YourSecretKey Here"
+ALGORITHM = "YourAlgorithm Here" #Example HS256
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl='auth/token')
 
-def autenticate_user(username:str, password:str, db):
-    user = db.query(User).filter(User.username == username).first()
+def autenticate_user(email:str, password:str, db):
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         return False
     if not bcrypt_context.verify(password, user.hashed_password):
         return False
     return user
 
-def create_access_token(username: str, user_id: int, expires_delta=timedelta):
-    encode = {'sub': username, 'id': user_id}
+def create_access_token(email: str, user_id: int, expires_delta=timedelta):
+    encode = {'sub': email, 'id': user_id}
     expires = datetime.now(timezone.utc) + expires_delta
     encode.update({'exp': expires})
     return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -39,14 +39,14 @@ def create_access_token(username: str, user_id: int, expires_delta=timedelta):
 async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
+        email: str = payload.get("sub")
         user_id: int = payload.get("id")
-        if username is None or user_id is None:
+        if email is None or user_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     
-    return {"username": username, "user_id": user_id}
+    return {"email": email, "user_id": user_id}
 
     
 def get_db():
@@ -58,16 +58,36 @@ def get_db():
 
 db_dependency = Annotated[Session, Depends(get_db)]
 
+@router.get("/profile", status_code=status.HTTP_200_OK)
+async def get_user_profile(user: Annotated[dict, Depends(get_current_user)],
+                          db: db_dependency):
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user_model = db.query(User).filter(User.id == user["user_id"]).first()
+    if user_model is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Return user data (excluding password ideally, but Pydantic response model can handle filtering if we had one)
+    # For now returning the model directly, FastAPI will serialize it. 
+    # Be careful not to return hashed_password if the response model isn't set.
+    # We should use a response model.
+    return {
+        "id": user_model.id,
+        "email": user_model.email,
+        "first_name": user_model.first_name,
+        "last_name": user_model.last_name,
+        "role": user_model.role
+    }
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, 
                       create_user_request: CreateUserRequest):
     create_user_model = User(
         email=create_user_request.email,
-        username=create_user_request.username,
         first_name=create_user_request.first_name,
         last_name=create_user_request.last_name,
         hashed_password=bcrypt_context.hash(create_user_request.password),
-        is_active=True,
         role=create_user_request.role
     )
 
@@ -123,7 +143,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     
     token = create_access_token(
-        username=authentication.username,
+        email=authentication.email,
         user_id=authentication.id,
         expires_delta=timedelta(minutes=30)
     )
